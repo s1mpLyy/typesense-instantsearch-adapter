@@ -487,9 +487,10 @@ export class SearchRequestAdapter {
     const adaptedSortBy = this._adaptSortBy(indexName);
 
     // Enhance the query if it exists
-    const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
-    const enhancedQuery = await this._enhanceQuery(originalQuery);
+    // const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
+    // const enhancedQuery = await this._enhanceQuery(originalQuery);
 
+    const enhancedQuery = "hamazwi";
     Object.assign(typesenseSearchParams, {
       collection: adaptedCollectionName,
       q: enhancedQuery,
