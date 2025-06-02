@@ -392,28 +392,52 @@ export class SearchRequestAdapter {
     return ruleContexts.join(",");
   }
 
+  /**
+   * Enhances a search query by calling an external API
+   *
+   * @param {string} query - The original search query
+   * @returns {Promise<string>} - The enhanced query, or original query if enhancement fails
+   *
+   * @description
+   * This method sends the query to an external enhancement API which can perform:
+   * - Query expansion (adding synonyms or related terms)
+   * - Spell correction
+   * - Language-specific processing (e.g., Arabic text normalization)
+   * - Domain-specific query understanding
+   *
+   * The API should return a response in the format:
+   * {
+   *   "processed": "enhanced query",
+   *   "original": "original query"
+   * }
+   *
+   * If the enhancement fails for any reason (network error, timeout, invalid response),
+   * the method will gracefully fall back to returning the original query.
+   */
   async _enhanceQuery(query) {
-    if (!query || query === '*') {
+    if (!query || query === "*") {
+      return query;
+    }
+
+    // Check if query enhancement is enabled
+    if (!this.configuration.queryEnhancement?.enabled) {
       return query;
     }
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), this.configuration.queryEnhancement.timeout || 5000);
 
-      const response = await fetch(
-        "https://arhhm5omsof3nkzctfctb5fcl40wdiya.lambda-url.eu-central-1.on.aws",
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            text: query,
-          }),
-          signal: controller.signal,
-        }
-      );
+      const response = await fetch(this.configuration.queryEnhancement.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: query,
+        }),
+        signal: controller.signal,
+      });
 
       clearTimeout(timeoutId);
 
@@ -422,15 +446,19 @@ export class SearchRequestAdapter {
       }
 
       const data = await response.json();
-      if (data && data.text) {
-        return data.text;
+      // Handle the actual response format
+      if (data && data.processed) {
+        // Use processed text if available, otherwise fallback to original
+        return data.processed || query;
       }
       return query;
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.warn('[Typesense-Instantsearch-Adapter] Query enhancement timed out after 5 seconds');
+      if (error.name === "AbortError") {
+        console.warn(
+          `[Typesense-Instantsearch-Adapter] Query enhancement timed out after ${this.configuration.queryEnhancement.timeout || 5000}ms`,
+        );
       } else {
-        console.warn('[Typesense-Instantsearch-Adapter] Query enhancement failed:', error.message);
+        console.warn("[Typesense-Instantsearch-Adapter] Query enhancement failed:", error.message);
       }
       return query; // Fallback to original query
     }
@@ -517,8 +545,8 @@ export class SearchRequestAdapter {
   async request() {
     // console.log(this.instantsearchRequests);
 
-    let searches = this.instantsearchRequests.map((instantsearchRequest) =>
-      this._buildSearchParameters(instantsearchRequest),
+    let searches = await Promise.all(
+      this.instantsearchRequests.map((instantsearchRequest) => this._buildSearchParameters(instantsearchRequest)),
     );
 
     // If this is a conversational search, then move conversation related params to query params

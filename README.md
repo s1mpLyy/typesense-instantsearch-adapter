@@ -271,6 +271,61 @@ export class AppComponent {
 
 You can then add any of the Instantsearch widgets [here](https://www.algolia.com/doc/guides/building-search-ui/widgets/showcase/angular/) that are [supported](#widget-compatibility) by the adapter.
 
+## Configuration
+
+### Query Enhancement (Beta)
+
+> Available as of typesense-instantsearch-adapter `2.9.1-3`
+
+The adapter supports enhancing search queries through an external API before sending them to Typesense. This is useful for query expansion, spell correction, or language-specific processing.
+
+```javascript
+const typesenseInstantsearchAdapter = new TypesenseInstantSearchAdapter({
+  server: {
+    apiKey: "abcd",
+    nodes: [
+      {
+        host: "localhost",
+        port: "8108",
+        protocol: "http",
+      },
+    ],
+  },
+  // Query enhancement configuration
+  queryEnhancement: {
+    enabled: true, // Enable query enhancement (defaults to false)
+    url: "https://your-query-enhancement-api.com/enhance", // Your enhancement API endpoint
+    timeout: 5000, // Timeout in milliseconds (defaults to 5000)
+  },
+  additionalSearchParameters: {
+    query_by: "name,description",
+  },
+});
+```
+
+#### How it works:
+
+1. When a user types a search query, it's sent to your enhancement API
+2. The API should return a response in the format: `{ "processed": "enhanced query", "original": "original query" }`
+3. The enhanced query is then used to search Typesense
+4. If the enhancement fails, the original query is used as a fallback
+
+#### Example API Response:
+
+```json
+{
+  "processed": "smartphone mobile phone cell",
+  "original": "smartphone"
+}
+```
+
+This feature is particularly useful for:
+
+- Multi-language support (e.g., Arabic text processing)
+- Query expansion with synonyms
+- Spell correction
+- Domain-specific query understanding
+
 ## Widget Specific Instructions
 
 ### `hierarchicalMenu`

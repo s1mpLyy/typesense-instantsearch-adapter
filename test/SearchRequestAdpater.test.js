@@ -1,7 +1,15 @@
 import { SearchRequestAdapter } from "../src/SearchRequestAdapter";
 import { Configuration } from "../src/Configuration";
 
+// Mock fetch globally
+global.fetch = jest.fn();
+
 describe("SearchRequestAdapter", () => {
+  beforeEach(() => {
+    // Clear all mocks before each test
+    jest.clearAllMocks();
+  });
+
   describe("._buildSearchParameters", () => {
     describe("when sortByOptions are provided", () => {
       it("adapts the given search parameters ", () => {
@@ -279,6 +287,97 @@ describe("SearchRequestAdapter", () => {
 
       const result = subject._adaptRulesContextsToOverrideTags(["context1", "context2"]);
       expect(result).toEqual("context1,context2");
+    });
+  });
+
+  describe("._enhanceQuery", () => {
+    it("returns original query for empty or wildcard queries", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+
+      expect(await subject._enhanceQuery("")).toBe("");
+      expect(await subject._enhanceQuery("*")).toBe("*");
+      expect(await subject._enhanceQuery(null)).toBe(null);
+      expect(await subject._enhanceQuery(undefined)).toBe(undefined);
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("enhances query successfully", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+      const mockResponse = {
+        ok: true,
+        json: () => Promise.resolve({ text: "enhanced query" }),
+      };
+      global.fetch.mockResolvedValueOnce(mockResponse);
+
+      const result = await subject._enhanceQuery("original query");
+
+      expect(result).toBe("enhanced query");
+      expect(global.fetch).toHaveBeenCalledWith(
+        "https://arhhm5omsof3nkzctfctb5fcl40wdiya.lambda-url.eu-central-1.on.aws",
+        expect.objectContaining({
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: "original query",
+          }),
+        }),
+      );
+    });
+
+    it("handles failed API response", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+      const mockResponse = {
+        ok: false,
+        status: 500,
+      };
+      global.fetch.mockResolvedValueOnce(mockResponse);
+
+      const result = await subject._enhanceQuery("original query");
+
+      expect(result).toBe("original query");
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    it("handles network errors", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+      global.fetch.mockRejectedValueOnce(new Error("Network error"));
+
+      const result = await subject._enhanceQuery("original query");
+
+      expect(result).toBe("original query");
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    it("handles timeout", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+      global.fetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(resolve, 6000); // Longer than our 5s timeout
+          }),
+      );
+
+      const result = await subject._enhanceQuery("original query");
+
+      expect(result).toBe("original query");
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    it("handles invalid response format", async () => {
+      const subject = new SearchRequestAdapter([], null, {});
+      const mockResponse = {
+        ok: true,
+        json: () => Promise.resolve({ invalid: "format" }),
+      };
+      global.fetch.mockResolvedValueOnce(mockResponse);
+
+      const result = await subject._enhanceQuery("original query");
+
+      expect(result).toBe("original query");
+      expect(global.fetch).toHaveBeenCalled();
     });
   });
 });

@@ -34,6 +34,29 @@ export class Configuration {
     this.geoLocationField = options.geoLocationField ?? "_geoloc";
     this.facetableFieldsWithSpecialCharacters = options.facetableFieldsWithSpecialCharacters ?? [];
 
+    /**
+     * Query Enhancement Configuration
+     *
+     * Allows enhancing search queries through an external API before sending to Typesense.
+     * This is useful for query expansion, spell correction, or language-specific processing.
+     *
+     * @param {boolean} enabled - Enable/disable query enhancement (default: false)
+     * @param {string} url - Enhancement API endpoint URL
+     * @param {number} timeout - Request timeout in milliseconds (default: 5000)
+     *
+     * @example
+     * queryEnhancement: {
+     *   enabled: true,
+     *   url: "https://api.example.com/enhance",
+     *   timeout: 3000
+     * }
+     */
+    this.queryEnhancement = options.queryEnhancement ?? {
+      enabled: false,
+      url: "https://arhhm5omsof3nkzctfctb5fcl40wdiya.lambda-url.eu-central-1.on.aws",
+      timeout: 5000,
+    };
+
     this.collectionSpecificSearchParameters = options.collectionSpecificSearchParameters ?? {};
 
     Object.keys(this.collectionSpecificSearchParameters).forEach((collection) => {
