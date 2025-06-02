@@ -726,7 +726,7 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
     value: function () {
       var _buildSearchParameters2 = (0,_babel_runtime_helpers_asyncToGenerator__WEBPACK_IMPORTED_MODULE_1__["default"])( /*#__PURE__*/_babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_5___default().mark(function _callee2(instantsearchRequest) {
         var _this$configuration$c2, _this$configuration$s;
-        var params, indexName, adaptedCollectionName, snakeCasedAdditionalSearchParameters, _i, _Object$entries, _Object$entries$_i, key, value, _i2, _Object$entries2, _Object$entries2$_i, _key, _value, typesenseSearchParams, adaptedSortBy, enhancedQuery, sortByOption;
+        var params, indexName, adaptedCollectionName, snakeCasedAdditionalSearchParameters, _i, _Object$entries, _Object$entries$_i, key, value, _i2, _Object$entries2, _Object$entries2$_i, _key, _value, typesenseSearchParams, adaptedSortBy, originalQuery, enhancedQuery, sortByOption;
         return _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_5___default().wrap(function _callee2$(_context2) {
           while (1) switch (_context2.prev = _context2.next) {
             case 0:
@@ -748,9 +748,36 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
               }
               typesenseSearchParams = Object.assign({}, snakeCasedAdditionalSearchParameters);
               adaptedSortBy = this._adaptSortBy(indexName); // Enhance the query if it exists
-              // const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
-              // const enhancedQuery = await this._enhanceQuery(originalQuery);
-              enhancedQuery = "hamazwi";
+              originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
+              _context2.next = 11;
+              return this._enhanceQuery(originalQuery);
+            case 11:
+              enhancedQuery = _context2.sent;
+              if (originalQuery == enhancedQuery) {
+                fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    originalQuery: originalQuery,
+                    enhancedQuery: enhancedQuery,
+                    status: "fail"
+                  })
+                });
+              } else {
+                fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    originalQuery: originalQuery,
+                    enhancedQuery: enhancedQuery,
+                    status: "success"
+                  })
+                });
+              }
               Object.assign(typesenseSearchParams, {
                 collection: adaptedCollectionName,
                 q: enhancedQuery,
@@ -793,7 +820,7 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
                   v = _ref3[1];
                 return v != null && v !== "";
               })));
-            case 17:
+            case 21:
             case "end":
               return _context2.stop();
           }
