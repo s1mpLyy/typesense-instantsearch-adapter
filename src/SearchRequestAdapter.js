@@ -489,31 +489,6 @@ export class SearchRequestAdapter {
     // Enhance the query if it exists
     const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
     const enhancedQuery = await this._enhanceQuery(originalQuery);
-    if (originalQuery == enhancedQuery) {
-      fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          originalQuery,
-          enhancedQuery,
-          status: "fail",
-        }),
-      });
-    } else {
-      fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          originalQuery,
-          enhancedQuery,
-          status: "success",
-        }),
-      });
-    }
 
     Object.assign(typesenseSearchParams, {
       collection: adaptedCollectionName,

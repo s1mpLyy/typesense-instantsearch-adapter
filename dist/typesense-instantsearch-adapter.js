@@ -753,31 +753,6 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
               return this._enhanceQuery(originalQuery);
             case 11:
               enhancedQuery = _context2.sent;
-              if (originalQuery == enhancedQuery) {
-                fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({
-                    originalQuery: originalQuery,
-                    enhancedQuery: enhancedQuery,
-                    status: "fail"
-                  })
-                });
-              } else {
-                fetch("https://webhook.site/dfc4863c-8d6f-4ca6-99cc-bd32dfe21895", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({
-                    originalQuery: originalQuery,
-                    enhancedQuery: enhancedQuery,
-                    status: "success"
-                  })
-                });
-              }
               Object.assign(typesenseSearchParams, {
                 collection: adaptedCollectionName,
                 q: enhancedQuery,
@@ -820,7 +795,7 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
                   v = _ref3[1];
                 return v != null && v !== "";
               })));
-            case 21:
+            case 20:
             case "end":
               return _context2.stop();
           }
