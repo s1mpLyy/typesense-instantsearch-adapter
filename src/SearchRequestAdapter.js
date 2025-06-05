@@ -19,6 +19,7 @@ export class SearchRequestAdapter {
     this.configuration = configuration;
     this.additionalSearchParameters = configuration.additionalSearchParameters;
     this.collectionSpecificSearchParameters = configuration.collectionSpecificSearchParameters;
+    this.queryEnhancementCache = new Map();
   }
 
   _shouldUseExactMatchForField(fieldName, collectionName) {
@@ -483,12 +484,18 @@ export class SearchRequestAdapter {
     }
 
     const typesenseSearchParams = Object.assign({}, snakeCasedAdditionalSearchParameters);
-
     const adaptedSortBy = this._adaptSortBy(indexName);
 
-    // Enhance the query if it exists
+    // Only enhance query if it's from SearchBox (when facets are not present and query exists)
     const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
-    const enhancedQuery = await this._enhanceQuery(originalQuery);
+    let enhancedQuery;
+
+    // Check if this is a SearchBox request (no facets and has query)
+    if (!params.facets && params.query !== undefined) {
+      enhancedQuery = await this._enhanceQuery(originalQuery);
+    } else {
+      enhancedQuery = originalQuery;
+    }
 
     Object.assign(typesenseSearchParams, {
       collection: adaptedCollectionName,
@@ -543,8 +550,6 @@ export class SearchRequestAdapter {
   }
 
   async request() {
-    // console.log(this.instantsearchRequests);
-
     let searches = await Promise.all(
       this.instantsearchRequests.map((instantsearchRequest) => this._buildSearchParameters(instantsearchRequest)),
     );

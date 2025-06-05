@@ -237,6 +237,7 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
     this.configuration = configuration;
     this.additionalSearchParameters = configuration.additionalSearchParameters;
     this.collectionSpecificSearchParameters = configuration.collectionSpecificSearchParameters;
+    this.queryEnhancementCache = new Map();
   }
   return (0,_babel_runtime_helpers_createClass__WEBPACK_IMPORTED_MODULE_4__["default"])(SearchRequestAdapter, [{
     key: "_shouldUseExactMatchForField",
@@ -747,12 +748,21 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
                 }
               }
               typesenseSearchParams = Object.assign({}, snakeCasedAdditionalSearchParameters);
-              adaptedSortBy = this._adaptSortBy(indexName); // Enhance the query if it exists
+              adaptedSortBy = this._adaptSortBy(indexName); // Only enhance query if it's from SearchBox (when facets are not present and query exists)
               originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
-              _context2.next = 11;
+              if (!(!params.facets && params.query !== undefined)) {
+                _context2.next = 15;
+                break;
+              }
+              _context2.next = 12;
               return this._enhanceQuery(originalQuery);
-            case 11:
+            case 12:
               enhancedQuery = _context2.sent;
+              _context2.next = 16;
+              break;
+            case 15:
+              enhancedQuery = originalQuery;
+            case 16:
               Object.assign(typesenseSearchParams, {
                 collection: adaptedCollectionName,
                 q: enhancedQuery,
@@ -795,7 +805,7 @@ var SearchRequestAdapter = /*#__PURE__*/function () {
                   v = _ref3[1];
                 return v != null && v !== "";
               })));
-            case 20:
+            case 24:
             case "end":
               return _context2.stop();
           }
