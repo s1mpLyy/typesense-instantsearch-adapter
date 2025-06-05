@@ -9,6 +9,7 @@ import { FacetSearchResponseAdapter } from "./FacetSearchResponseAdapter";
 export default class TypesenseInstantsearchAdapter {
   constructor(options) {
     this.updateConfiguration(options);
+    this.queryEnhancementCache = new Map();
     this.searchClient = {
       clearCache: () => this.clearCache(),
       search: (instantsearchRequests) => this.searchTypesenseAndAdapt(instantsearchRequests),
@@ -17,16 +18,121 @@ export default class TypesenseInstantsearchAdapter {
     };
   }
 
+  /**
+   * Enhances a search query by calling an external API
+   */
+  async _enhanceQuery(query) {
+    if (!query || query === "*") {
+      return query;
+    }
+
+    // Check if query enhancement is enabled
+    if (!this.configuration.queryEnhancement?.enabled) {
+      return query;
+    }
+
+    // Check cache first
+    if (this.queryEnhancementCache.has(query)) {
+      return this.queryEnhancementCache.get(query);
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.configuration.queryEnhancement.timeout || 5000);
+
+      const response = await fetch(this.configuration.queryEnhancement.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: query,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data && data.processed) {
+        // Cache the enhanced query
+        this.queryEnhancementCache.set(query, data.processed);
+        return data.processed;
+      }
+
+      // Cache the original query if no enhancement
+      this.queryEnhancementCache.set(query, query);
+      return query;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        console.warn(
+          `[Typesense-Instantsearch-Adapter] Query enhancement timed out after ${this.configuration.queryEnhancement.timeout || 5000}ms`,
+        );
+      } else {
+        console.warn("[Typesense-Instantsearch-Adapter] Query enhancement failed:", error.message);
+      }
+      // Cache the original query on error
+      this.queryEnhancementCache.set(query, query);
+      return query;
+    }
+  }
+
+  async _enhanceSearchRequests(instantsearchRequests) {
+    // Get all unique queries from all requests
+    const allQueries = instantsearchRequests
+      .map((req) => req.params.query)
+      .filter((query) => query && query !== "" && query !== "*");
+
+    if (allQueries.length === 0) {
+      return instantsearchRequests; // No enhancement needed
+    }
+
+    const uniqueQueries = [...new Set(allQueries)];
+
+    // Enhance all unique queries in parallel
+    const enhancementPromises = uniqueQueries.map(async (query) => {
+      const enhancedQuery = await this._enhanceQuery(query);
+      return { original: query, enhanced: enhancedQuery };
+    });
+
+    const enhancements = await Promise.all(enhancementPromises);
+    const queryMap = new Map(enhancements.map((e) => [e.original, e.enhanced]));
+
+    // Update all requests with enhanced queries
+    return instantsearchRequests.map((req) => {
+      if (req.params.query && req.params.query !== "" && req.params.query !== "*") {
+        const enhancedQuery = queryMap.get(req.params.query);
+        if (enhancedQuery && enhancedQuery !== req.params.query) {
+          return {
+            ...req,
+            params: {
+              ...req.params,
+              query: enhancedQuery,
+            },
+          };
+        }
+      }
+      return req;
+    });
+  }
+
   async searchTypesenseAndAdapt(instantsearchRequests) {
     let typesenseResponse;
     try {
-      typesenseResponse = await this._adaptAndPerformTypesenseRequest(instantsearchRequests);
+      // Enhance queries before processing
+      const enhancedRequests = await this._enhanceSearchRequests(instantsearchRequests);
+
+      typesenseResponse = await this._adaptAndPerformTypesenseRequest(enhancedRequests);
 
       const adaptedResponses = typesenseResponse.results.map((typesenseResult, index) => {
         this._validateTypesenseResult(typesenseResult);
         const responseAdapter = new SearchResponseAdapter(
           typesenseResult,
-          instantsearchRequests[index],
+          instantsearchRequests[index], // Use original requests for response mapping
           this.configuration,
           typesenseResponse.results,
           typesenseResponse,
@@ -75,6 +181,7 @@ export default class TypesenseInstantsearchAdapter {
 
   clearCache() {
     this.typesenseClient = new TypesenseSearchClient(this.configuration.server);
+    this.queryEnhancementCache.clear();
     return this.searchClient;
   }
 

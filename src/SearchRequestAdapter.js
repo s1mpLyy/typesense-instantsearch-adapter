@@ -19,7 +19,6 @@ export class SearchRequestAdapter {
     this.configuration = configuration;
     this.additionalSearchParameters = configuration.additionalSearchParameters;
     this.collectionSpecificSearchParameters = configuration.collectionSpecificSearchParameters;
-    this.queryEnhancementCache = new Map();
   }
 
   _shouldUseExactMatchForField(fieldName, collectionName) {
@@ -393,78 +392,6 @@ export class SearchRequestAdapter {
     return ruleContexts.join(",");
   }
 
-  /**
-   * Enhances a search query by calling an external API
-   *
-   * @param {string} query - The original search query
-   * @returns {Promise<string>} - The enhanced query, or original query if enhancement fails
-   *
-   * @description
-   * This method sends the query to an external enhancement API which can perform:
-   * - Query expansion (adding synonyms or related terms)
-   * - Spell correction
-   * - Language-specific processing (e.g., Arabic text normalization)
-   * - Domain-specific query understanding
-   *
-   * The API should return a response in the format:
-   * {
-   *   "processed": "enhanced query",
-   *   "original": "original query"
-   * }
-   *
-   * If the enhancement fails for any reason (network error, timeout, invalid response),
-   * the method will gracefully fall back to returning the original query.
-   */
-  async _enhanceQuery(query) {
-    if (!query || query === "*") {
-      return query;
-    }
-
-    // Check if query enhancement is enabled
-    if (!this.configuration.queryEnhancement?.enabled) {
-      return query;
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.configuration.queryEnhancement.timeout || 5000);
-
-      const response = await fetch(this.configuration.queryEnhancement.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: query,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      // Handle the actual response format
-      if (data && data.processed) {
-        // Use processed text if available, otherwise fallback to original
-        return data.processed || query;
-      }
-      return query;
-    } catch (error) {
-      if (error.name === "AbortError") {
-        console.warn(
-          `[Typesense-Instantsearch-Adapter] Query enhancement timed out after ${this.configuration.queryEnhancement.timeout || 5000}ms`,
-        );
-      } else {
-        console.warn("[Typesense-Instantsearch-Adapter] Query enhancement failed:", error.message);
-      }
-      return query; // Fallback to original query
-    }
-  }
-
   async _buildSearchParameters(instantsearchRequest) {
     const params = instantsearchRequest.params;
     const indexName = instantsearchRequest.indexName;
@@ -486,20 +413,12 @@ export class SearchRequestAdapter {
     const typesenseSearchParams = Object.assign({}, snakeCasedAdditionalSearchParameters);
     const adaptedSortBy = this._adaptSortBy(indexName);
 
-    // Only enhance query if it's from SearchBox (when facets are not present and query exists)
-    const originalQuery = params.query === "" || params.query === undefined ? "*" : params.query;
-    let enhancedQuery;
-
-    // Check if this is a SearchBox request (no facets and has query)
-    if (!params.facets && params.query !== undefined) {
-      enhancedQuery = await this._enhanceQuery(originalQuery);
-    } else {
-      enhancedQuery = originalQuery;
-    }
+    // Use the query as provided (already enhanced if needed)
+    const query = params.query === "" || params.query === undefined ? "*" : params.query;
 
     Object.assign(typesenseSearchParams, {
       collection: adaptedCollectionName,
-      q: enhancedQuery,
+      q: query,
       facet_by:
         snakeCasedAdditionalSearchParameters.facet_by || this._adaptFacetBy(params.facets, adaptedCollectionName),
       filter_by: this._adaptFilters(params, adaptedCollectionName) || snakeCasedAdditionalSearchParameters.filter_by,
