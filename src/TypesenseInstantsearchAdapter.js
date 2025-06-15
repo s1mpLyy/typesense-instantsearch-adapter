@@ -10,6 +10,7 @@ export default class TypesenseInstantsearchAdapter {
   constructor(options) {
     this.updateConfiguration(options);
     this.queryEnhancementCache = new Map();
+    this.queryEnhancementPromises = new Map(); // Cache for ongoing promises
     this.searchClient = {
       clearCache: () => this.clearCache(),
       search: (instantsearchRequests) => this.searchTypesenseAndAdapt(instantsearchRequests),
@@ -37,8 +38,33 @@ export default class TypesenseInstantsearchAdapter {
       return this.queryEnhancementCache.get(query);
     }
 
+    // Check if there's already an ongoing request for this query
+    if (this.queryEnhancementPromises.has(query)) {
+      console.debug(`[Query Enhancement] Waiting for ongoing request for: "${query}"`);
+      return await this.queryEnhancementPromises.get(query);
+    }
+
     console.debug(`[Query Enhancement] Making API call for: "${query}"`);
 
+    // Create and cache the promise
+    const enhancementPromise = this._performQueryEnhancement(query);
+    this.queryEnhancementPromises.set(query, enhancementPromise);
+
+    try {
+      const result = await enhancementPromise;
+      // Cache the result
+      this.queryEnhancementCache.set(query, result);
+      return result;
+    } finally {
+      // Remove the promise from cache once completed
+      this.queryEnhancementPromises.delete(query);
+    }
+  }
+
+  /**
+   * Performs the actual API call for query enhancement
+   */
+  async _performQueryEnhancement(query) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.configuration.queryEnhancement.timeout || 5000);
@@ -62,14 +88,10 @@ export default class TypesenseInstantsearchAdapter {
 
       const data = await response.json();
       if (data && data.processed) {
-        // Cache the enhanced query
-        this.queryEnhancementCache.set(query, data.processed);
         console.debug(`[Query Enhancement] API success: "${query}" -> "${data.processed}"`);
         return data.processed;
       }
 
-      // Cache the original query if no enhancement
-      this.queryEnhancementCache.set(query, query);
       console.debug(`[Query Enhancement] No enhancement returned for: "${query}"`);
       return query;
     } catch (error) {
@@ -80,8 +102,7 @@ export default class TypesenseInstantsearchAdapter {
       } else {
         console.warn("[Typesense-Instantsearch-Adapter] Query enhancement failed:", error.message);
       }
-      // Cache the original query on error
-      this.queryEnhancementCache.set(query, query);
+      // Return original query on error
       return query;
     }
   }
@@ -194,6 +215,7 @@ export default class TypesenseInstantsearchAdapter {
   clearCache() {
     this.typesenseClient = new TypesenseSearchClient(this.configuration.server);
     this.queryEnhancementCache.clear();
+    this.queryEnhancementPromises.clear();
     return this.searchClient;
   }
 
