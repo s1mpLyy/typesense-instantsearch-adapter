@@ -33,8 +33,11 @@ export default class TypesenseInstantsearchAdapter {
 
     // Check cache first
     if (this.queryEnhancementCache.has(query)) {
+      console.debug(`[Query Enhancement] Using cached result for: "${query}"`);
       return this.queryEnhancementCache.get(query);
     }
+
+    console.debug(`[Query Enhancement] Making API call for: "${query}"`);
 
     try {
       const controller = new AbortController();
@@ -61,11 +64,13 @@ export default class TypesenseInstantsearchAdapter {
       if (data && data.processed) {
         // Cache the enhanced query
         this.queryEnhancementCache.set(query, data.processed);
+        console.debug(`[Query Enhancement] API success: "${query}" -> "${data.processed}"`);
         return data.processed;
       }
 
       // Cache the original query if no enhancement
       this.queryEnhancementCache.set(query, query);
+      console.debug(`[Query Enhancement] No enhancement returned for: "${query}"`);
       return query;
     } catch (error) {
       if (error.name === "AbortError") {
@@ -92,6 +97,10 @@ export default class TypesenseInstantsearchAdapter {
     }
 
     const uniqueQueries = [...new Set(allQueries)];
+    console.debug(
+      `[Query Enhancement] Processing ${instantsearchRequests.length} requests with ${uniqueQueries.length} unique queries:`,
+      uniqueQueries,
+    );
 
     // Enhance all unique queries in parallel
     const enhancementPromises = uniqueQueries.map(async (query) => {
@@ -154,13 +163,16 @@ export default class TypesenseInstantsearchAdapter {
   async searchTypesenseForFacetValuesAndAdapt(instantsearchRequests) {
     let typesenseResponse;
     try {
-      typesenseResponse = await this._adaptAndPerformTypesenseRequest(instantsearchRequests);
+      // Enhance queries before processing (same as regular search)
+      const enhancedRequests = await this._enhanceSearchRequests(instantsearchRequests);
+
+      typesenseResponse = await this._adaptAndPerformTypesenseRequest(enhancedRequests);
 
       const adaptedResponses = typesenseResponse.results.map((typesenseResult, index) => {
         this._validateTypesenseResult(typesenseResult);
         const responseAdapter = new FacetSearchResponseAdapter(
           typesenseResult,
-          instantsearchRequests[index],
+          instantsearchRequests[index], // Use original requests for response mapping
           this.configuration,
         );
         return responseAdapter.adapt();
